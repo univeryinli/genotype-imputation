@@ -176,7 +176,7 @@ def train_model(models, dataloads, scheduler,criterion=None,history=None,num_epo
             val_index=random.randint(3,4)
         print('train_index:'+str(train_index)+','+'val_index'+str(val_index))
 
-        # Ã¿Ò»¸öµü´ú¶¼ÓĞÑµÁ·ºÍÑéÖ¤½×¶Î
+        # æ¯ä¸€ä¸ªè¿­ä»£éƒ½æœ‰è®­ç»ƒå’ŒéªŒè¯é˜¶æ®µ
         for phase in ['train', 'val']:
             steps = 0
             if phase == 'train':
@@ -184,7 +184,7 @@ def train_model(models, dataloads, scheduler,criterion=None,history=None,num_epo
                     steps=0
                 else:
                     steps = train_steps
-                # ÉèÖÃ training
+                # è®¾ç½® training
                 for model in models:
                     model.train(True)
 
@@ -193,7 +193,7 @@ def train_model(models, dataloads, scheduler,criterion=None,history=None,num_epo
                     steps=0
                 else:
                     steps = val_steps
-                # ÉèÖÃ evaluate
+                # è®¾ç½® evaluate
                 for model in models:
                     model.train(False)
 
@@ -203,9 +203,9 @@ def train_model(models, dataloads, scheduler,criterion=None,history=None,num_epo
             acc=torch.Tensor([0])
             stop_setps=0
 
-            # ±éÀúÊı¾İ
+            # éå†æ•°æ®
             for i, dataset in enumerate(dataloads[phase]):
-                # »ñÈ¡ÊäÈë,Èç¹ûÊÇÓĞ¶à¸öÊäÈëµÄ»°£¬¿ÉÒÔÓÃ×ÖµäÀ´ÃèÊö¶à¸öÊäÈë£¬È»ºóÍ¨¹ıkeyÀ´»ñÈ¡Êä
+                # è·å–è¾“å…¥,å¦‚æœæ˜¯æœ‰å¤šä¸ªè¾“å…¥çš„è¯ï¼Œå¯ä»¥ç”¨å­—å…¸æ¥æè¿°å¤šä¸ªè¾“å…¥ï¼Œç„¶åé€šè¿‡keyæ¥è·å–è¾“
                 encode_input = dataset['encode_input']
                 decode_input=dataset['decode_input']
                 target_masked=dataset['target_masked']
@@ -222,7 +222,7 @@ def train_model(models, dataloads, scheduler,criterion=None,history=None,num_epo
                         models = [model.cuda() for model in models]
 
 
-                # ÓÃcuda½øĞĞ°ü×°
+                # ç”¨cudaè¿›è¡ŒåŒ…è£…
                 if use_cuda:
                     encode_input = encode_input.cuda()
                     decode_input = decode_input.cuda()
@@ -230,10 +230,10 @@ def train_model(models, dataloads, scheduler,criterion=None,history=None,num_epo
                     positional_vector_decoder=positional_vector_decoder.cuda()
                     decode_target=decode_target.cuda()
 
-                # ÉèÖÃ²ÎÊı
+                # è®¾ç½®å‚æ•°
                 scheduler.optimizer.zero_grad()
 
-                # ÕıÏò
+                # æ­£å‘
                 output_v = models[0](encode_input,decode_input,positional_vector_decoder,target_masked)
 
                 if phase=='train':
@@ -258,12 +258,12 @@ def train_model(models, dataloads, scheduler,criterion=None,history=None,num_epo
                 # acc = (criterion['acc'](decode_outputs, labels))
                 #acc = loss
 
-                # Èç¹ûÊÇÑµÁ·½×¶ÎÏòºó´«µİºÍÓÅ»¯,»á¶Ô¶à¸öÄ£ĞÍµÄ²ÎÊı½øĞĞstep
+                # å¦‚æœæ˜¯è®­ç»ƒé˜¶æ®µå‘åä¼ é€’å’Œä¼˜åŒ–,ä¼šå¯¹å¤šä¸ªæ¨¡å‹çš„å‚æ•°è¿›è¡Œstep
                 if phase == 'train':
                     loss.backward()
                     scheduler.optimizer.step()
 
-                # Í³¼ÆËùÓĞloss
+                # ç»Ÿè®¡æ‰€æœ‰loss
                 epoch_loss += loss.data.item()
                 epoch_acc += acc.data.item()
 
@@ -291,7 +291,7 @@ def train_model(models, dataloads, scheduler,criterion=None,history=None,num_epo
                 val_epoch_loss = epoch_loss / stop_setps
                 val_epoch_acc = epoch_acc / stop_setps
 
-            # Éî¿½±´Ä£ĞÍ£¬µ±Ä£ĞÍ±íÏÖĞ§¹û±äºÃÊ±£¬ĞòÁĞ»¯Ä£ĞÍ
+            # æ·±æ‹·è´æ¨¡å‹ï¼Œå½“æ¨¡å‹è¡¨ç°æ•ˆæœå˜å¥½æ—¶ï¼Œåºåˆ—åŒ–æ¨¡å‹
             if model_save=='train_loss':
                 if train_epoch_loss < best_loss:
                     best_loss = train_epoch_loss
@@ -312,10 +312,10 @@ def train_model(models, dataloads, scheduler,criterion=None,history=None,num_epo
                     print('val loss model has not improving!')
 
         scheduler.step()
-        # ±£´æ×î¼ÑÄ£ĞÍµÄÈ¨ÖØ£¬Èç¹ûÃ»ÓĞ×î¼ÑÄ£ĞÍ£¬ÄÇÃ´±£´æ×î¼ÑÄ£
+        # ä¿å­˜æœ€ä½³æ¨¡å‹çš„æƒé‡ï¼Œå¦‚æœæ²¡æœ‰æœ€ä½³æ¨¡å‹ï¼Œé‚£ä¹ˆä¿å­˜æœ€ä½³æ¨¡
         torch.save({'epoch':epoch,'state':best_model_wts,'comments':'random but 3train and 2val ,para cal,cover the masked position with0!'}, os.path.join(model_save_path ,'3.best_model_wts'))
 
-        ## ±£´æÄ£ĞÍÈ¨ÖØ£¬±È½ÏÈ¨ÖØËæÊ±¼ä±ä»¯µÄ
+        ## ä¿å­˜æ¨¡å‹æƒé‡ï¼Œæ¯”è¾ƒæƒé‡éšæ—¶é—´å˜åŒ–çš„
         if board:
             if torch.cuda.device_count() > 1 and use_cuda:
                 for name, para in models[0].module.named_parameters():
