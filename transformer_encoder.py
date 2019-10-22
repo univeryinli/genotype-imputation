@@ -100,14 +100,17 @@ class Gene(nn.Module):
 
         self.linear4 = nn.Linear(1024, dmodel_out)
 
+        self.multi_head5 = nn.MultiheadAttention(dmodel_out, nhead, dropout=drop_out)
+        self.drop_out5_1 = nn.Dropout(drop_out)
+        self.norm5_1 = nn.LayerNorm(dmodel_out)
 
-    def forward(self, x,p1,p2,p3,p4):
+    def forward(self, x,p1,p2,p3):
         x=x.transpose(1,0)
         p1=p1.transpose(1,0)
         p2 = p2.transpose(1, 0)
         p3 = p3.transpose(1, 0)
-        p4 = p4.transpose(1, 0)
 
+        #5008
         x=x+p1
         x1,_=self.multi_head1(x,x,x)
         x1=x+self.drop_out1_1(x1)
@@ -115,6 +118,7 @@ class Gene(nn.Module):
 
         x2=F.relu(self.linear1(x1),inplace=True)
 
+        #1024
         x2=x2+p2
         x3,_=self.multi_head2(x2,x2,x2)
         x3=x2+self.drop_out2_1(x3)
@@ -122,6 +126,7 @@ class Gene(nn.Module):
 
         x4=F.relu(self.linear2(x3),inplace=True)
 
+        #256
         x4=x4+p3
         x5,_=self.multi_head3(x4,x4,x4)
         x5=x4+self.drop_out3_1(x5)
@@ -129,14 +134,21 @@ class Gene(nn.Module):
 
         x6=F.relu(self.linear3(x5),inplace=True)
 
-        x6=x6+p4
-        x7,_=self.multi_head4(x6,x6,x6)
+        #1024
+        x6=x6+p2
+        x7,_=self.multi_head4(x6,x3,x3)
         x7=x6+self.drop_out4_1(x7)
         x7=self.norm4_1(x7)
 
         x8=F.relu(self.linear4(x7),inplace=True)
 
-        return x8.transpose(1,0)
+        #5008
+        x8=x8+p1
+        x9,_=self.multi_head5(x8,x1,x1)
+        x9=x8+self.drop_out5_1(x8)
+        x9=self.norm5_1(x9)
+
+        return x9.transpose(1,0)
 
 
 '''
@@ -177,10 +189,9 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=50,board=N
     position_v1 = position_v_g(5008, 1000).expand(dataloads['train'].batch_size,1000,5008)
     position_v2 = position_v_g(1024, 1000).expand(dataloads['train'].batch_size,1000,1024)
     position_v3 = position_v_g(256, 1000).expand(dataloads['train'].batch_size,1000,256)
-    position_v4 = position_v_g(1024, 1000).expand(dataloads['train'].batch_size,1000,1024)
 
     if board:
-        board.add_graph(model, (dataloads['train'].dataset[0]['encode_input'].float().unsqueeze(0),position_v1[0:1],position_v2[0:1],position_v3[0:1],position_v4[0:1]))
+        board.add_graph(model, (dataloads['train'].dataset[0]['encode_input'].float().unsqueeze(0),position_v1[0:1],position_v2[0:1],position_v3[0:1]))
 
     if start_epoch!=0:
         load_state=torch.load(os.path.join(model_save_path ,'1.best_model_wts'))
@@ -250,14 +261,12 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=50,board=N
                     position_v1=position_v1.cuda()
                     position_v2=position_v2.cuda()
                     position_v3=position_v3.cuda()
-                    position_v4=position_v4.cuda()
-
 
                 # ????
                 scheduler.optimizer.zero_grad()
 
                 # ??
-                output_v = model(encode_input,position_v1,position_v2,position_v3,position_v4)
+                output_v = model(encode_input,position_v1,position_v2,position_v3)
                 loss2=0.1*F.mse_loss(output_v,encode_target)
                 loss1=0.9*F.mse_loss(output_v.masked_select(encode_mask),encode_mask_target)
                 loss = loss1+loss2
@@ -317,7 +326,7 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=50,board=N
 
         scheduler.step()
         # ??????????????????????????
-        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'transformer-encoder'}, os.path.join(model_save_path ,'13.best_model_wts'))
+        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'transformer-encoder'}, os.path.join(model_save_path ,'14.best_model_wts'))
 
         ## ?????????????????
         if board:
@@ -397,6 +406,7 @@ def predict():
 
     model = Gene(1, 1)
     model.load
+
     for i,dataset in enumerate(data_loader):
         dataset=model
 
