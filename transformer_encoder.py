@@ -370,7 +370,7 @@ def main():
 
     train_dataset = TrainData(input_data.loc[0:int(length*0.8)],window_size,masked)
     val_dataset = TestData(input_data.loc[int(length*0.8)+1:length],window_size,masked)
-    data_loader = {'train':DataLoader(train_dataset,batch_size=16,shuffle=True,drop_last=True,num_workers=16),'val':DataLoader(val_dataset,batch_size=16,shuffle=True,num_workers=16)}
+    data_loader = {'train':DataLoader(train_dataset,batch_size=16,shuffle=True,drop_last=True,num_workers=16),'val':DataLoader(val_dataset,batch_size=16,shuffle=True,drop_last=True,num_workers=16)}
 
     model=Gene(5008,5008)
     lr=0.01
