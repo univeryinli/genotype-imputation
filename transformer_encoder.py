@@ -67,7 +67,7 @@ class TestData(Dataset):
         dic['encode_target']=encode_target
         return dic
 
-
+'''
 class Gene(nn.Module):
     def __init__(self, dmodel_in, dmodel_out,drop_out=0.1,nhead=8):
         super(Gene, self).__init__()
@@ -149,7 +149,25 @@ class Gene(nn.Module):
         x9=self.norm5_1(x9)
 
         return x9.transpose(1,0)
+'''
 
+
+class Gene(nn.Module):
+    def __init__(self, dmodel_in,nhead=8):
+        super(Gene, self).__init__()
+        #self.multi_head1=nn.MultiheadAttention(dmodel_in,nhead,dropout=0.1)
+        self.transformer_encoder=nn.TransformerEncoderLayer(dmodel_in,nhead,dropout=0.1,dim_feedforward=2048)
+        #self.layer_out = nn.LayerNorm(dmodel_in)
+        self.linear=nn.Linear(dmodel_in,dmodel_in)
+
+    def forward(self, x,p1):
+        x=x.transpose(1,0)
+        x=x+p1.transpose(1,0)
+        x=self.transformer_encoder(x)
+        x=self.linear(x)
+        x=torch.sigmoid(x)
+
+        return x.transpose(1,0)
 
 '''
 class TrainModel():
@@ -163,7 +181,7 @@ class TrainModel():
 '''
 
 
-def train_model(model, dataloads, scheduler,criterion=None,num_epochs=50,board=None,
+def train_model(model, dataloads, scheduler,criterion=None,num_epochs=100,board=None,
                 train_steps=None, val_steps=None, model_save='val_loss',use_cuda=False,model_save_path='./runs',start_epoch=0,lr=None):
     # train step 'None' is iter all the datasets ,if num ,will iter num step.
     since = time.time()
@@ -191,7 +209,7 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=50,board=N
     position_v3 = position_v_g(256, 1000).expand(dataloads['train'].batch_size,1000,256)
 
     if board:
-        board.add_graph(model, (dataloads['train'].dataset[0]['encode_input'].float().unsqueeze(0),position_v1[0:1],position_v2[0:1],position_v3[0:1]))
+        board.add_graph(model, (dataloads['train'].dataset[0]['encode_input'].float().unsqueeze(0),position_v1[0:1]))
 
     if start_epoch!=0:
         load_state=torch.load(os.path.join(model_save_path ,'1.best_model_wts'))
@@ -259,16 +277,16 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=50,board=N
                     encode_target=encode_target.cuda()
                     encode_mask_target=encode_mask_target.cuda()
                     position_v1=position_v1.cuda()
-                    position_v2=position_v2.cuda()
-                    position_v3=position_v3.cuda()
+                    #position_v2=position_v2.cuda()
+                    #position_v3=position_v3.cuda()
 
                 # ????
                 scheduler.optimizer.zero_grad()
 
                 # ??
-                output_v = model(encode_input,position_v1,position_v2,position_v3)
-                loss2=0.1*F.mse_loss(output_v,encode_target)
-                loss1=0.9*F.mse_loss(output_v.masked_select(encode_mask),encode_mask_target)
+                output_v = model(encode_input,position_v1)
+                loss2=0.1*F.mse_loss(output_v,torch.sigmoid(encode_target))
+                loss1=0.9*F.mse_loss(output_v.masked_select(encode_mask),torch.sigmoid(encode_mask_target))
                 loss = loss1+loss2
 
                 # ??????????????,???????????step
@@ -326,7 +344,7 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=50,board=N
 
         scheduler.step()
         # ??????????????????????????
-        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'transformer-encoder'}, os.path.join(model_save_path ,'14.best_model_wts'))
+        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'transformer-encoder'}, os.path.join(model_save_path ,'15.best_model_wts'))
 
         ## ?????????????????
         if board:
@@ -379,9 +397,9 @@ def main():
 
     train_dataset = TrainData(input_data.loc[0:int(length*0.8)],window_size,masked)
     val_dataset = TestData(input_data.loc[int(length*0.8)+1:length],window_size,masked)
-    data_loader = {'train':DataLoader(train_dataset,batch_size=16,shuffle=True,drop_last=True,num_workers=16),'val':DataLoader(val_dataset,batch_size=16,shuffle=True,drop_last=True,num_workers=16)}
+    data_loader = {'train':DataLoader(train_dataset,batch_size=8,shuffle=True,drop_last=True,num_workers=16),'val':DataLoader(val_dataset,batch_size=8,shuffle=True,drop_last=True,num_workers=16)}
 
-    model=Gene(5008,5008)
+    model=Gene(5008)
     lr=0.01
     optim1=optim.SGD(model.parameters(),lr=lr,momentum=0.9)
     lr_sch=optim.lr_scheduler.LambdaLR(optim1,lr_lambda=lambda epoch:epoch*0.95)
