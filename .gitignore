@@ -2,7 +2,7 @@ processed_hapmap3
 processed_phase1
 processed_phase3
 gene_chip
-
+reference_panel
 runs_1
 runs
 __pycache__
