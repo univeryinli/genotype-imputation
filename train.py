@@ -6,10 +6,11 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import pandas as pd
-from predict import r2
+from utils import r2_score,pearson
 
 
-def train_model(model, dataloads, scheduler,criterion=None,num_epochs=23,board=None,
+
+def train_model(model, dataloads, scheduler,criterion=None,num_epochs=14,board=None,
                 train_steps=None, val_steps=None, model_save='val_loss',use_cuda=False,model_save_path='./runs',start_epoch=0,lr=None):
     # train step 'None' is iter all the datasets ,if num ,will iter num step.
     since = time.time()
@@ -38,9 +39,6 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=23,board=N
     if torch.cuda.device_count() > 1 and use_cuda:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
         model=nn.DataParallel(model).cuda()
-
-        #load=torch.load('50k.1.best_model_wts')
-        #models[0].load_state_dict(load[0])
         print('model is on cuda by gpus!')
     elif torch.cuda.device_count() == 1 and use_cuda:
         model=model.cuda()
@@ -92,17 +90,17 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=23,board=N
                     encode_mask_target=encode_mask_target.cuda()
 
 
-                # ????
+                #
                 scheduler.optimizer.zero_grad()
 
-                # ??
+                #
                 output_v = model(encode_input)
                 loss2=0.1*F.binary_cross_entropy(output_v,encode_target)
                 loss1=0.9*F.binary_cross_entropy(output_v.masked_select(encode_mask),encode_mask_target)
                 loss = loss1+loss2
 
-                acc = r2(output_v.masked_select(encode_mask),encode_mask_target)
-                # ??????????????,???????????step
+                acc = r2_score(output_v.masked_select(encode_mask),encode_mask_target)
+                # step
                 if phase == 'train':
                     loss.backward()
                     scheduler.optimizer.step()
@@ -131,7 +129,7 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=23,board=N
                 val_epoch_loss = epoch_loss / (stop_setps+1)
                 val_epoch_acc = epoch_acc / (stop_setps+1)
 
-        # ??????????????????????
+        # model save mode
         if model_save=='train_loss':
             if train_epoch_loss < best_train_loss:
                 best_train_loss = train_epoch_loss
@@ -154,10 +152,10 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=23,board=N
                 print('val loss model has not improving!')
 
         scheduler.step()
-        # ??????????????????????????
-        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'1000G phase3_div'}, os.path.join(model_save_path ,'6.best_model_wts'))
+        # save model
+        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'1000G phase3_div'}, os.path.join(model_save_path ,'12.best_model_wts'))
 
-        ## ?????????????????
+        # board save
         if board:
             if torch.cuda.device_count() > 1 and use_cuda:
                 for name, para in model.module.named_parameters():
@@ -206,7 +204,7 @@ def main():
 
     mask = Mask(gene_chip)
     mask.maf_cal(input_data)
-    mask.missing_rate=0.3
+    mask.missing_rate=0.99
 
     div_rate=0.7
     window_size = 1000
@@ -218,7 +216,7 @@ def main():
 
     train_dataset = TrainData(train_data,window_size,mask)
     val_dataset = TestData(val_data,window_size,mask)
-    data_loader = {'train':DataLoader(train_dataset,batch_size=8,shuffle=True,drop_last=True,num_workers=16),'val':DataLoader(val_dataset,batch_size=8,shuffle=True,num_workers=16)}
+    data_loader = {'train':DataLoader(train_dataset,batch_size=6,shuffle=True,drop_last=True,num_workers=16),'val':DataLoader(val_dataset,batch_size=6,shuffle=True,num_workers=16)}
 
     model=Gene(1,1)
     lr=0.01
@@ -231,4 +229,5 @@ def main():
 
 
 if __name__ == '__main__':
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,2,3,4,5'
     main()

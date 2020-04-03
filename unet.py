@@ -16,7 +16,7 @@ class TrainData(Dataset):
         self.window_size=window_size
         self.step=window_size//8
         self.window_matrix = [i for i in range(0, self.input_data.shape[0] - window_size, self.step)]
-        self.people_index = random.sample([i for i in range(input_data.shape[1])], int((0.1*input_data.shape[1])))
+        self.people_index = random.sample([i for i in range(input_data.shape[1])], int((0.05*input_data.shape[1])))
         self.all_mask=mask.random_single_mask(input_data,self.people_index)
         print('train ample is:' + str(len(self.window_matrix)))
 
@@ -42,7 +42,7 @@ class TestData(Dataset):
         self.window_size=window_size
         self.step=window_size//8
         self.window_matrix = [i for i in range(0, self.input_data.shape[0] - window_size, self.step)]
-        self.people_index = random.sample([i for i in range(input_data.shape[1])], int((0.1*input_data.shape[1])))
+        self.people_index = random.sample([i for i in range(input_data.shape[1])], int((0.05*input_data.shape[1])))
         self.all_mask = mask.random_single_mask(input_data, self.people_index)
         print('test ample is:' + str(len(self.window_matrix)))
 
