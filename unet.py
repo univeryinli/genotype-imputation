@@ -11,13 +11,32 @@ import pandas as pd
 
 
 class TrainData(Dataset):
-    def __init__(self,input_data,window_size,mask):
-        self.input_data=input_data
+    def __init__(self,input_data,data_div,window_size,mask):
+
         self.window_size=window_size
-        self.step=window_size//8
-        self.window_matrix = [i for i in range(0, self.input_data.shape[0] - window_size, self.step)]
-        self.people_index = random.sample([i for i in range(input_data.shape[1])], int((0.05*input_data.shape[1])))
-        self.all_mask=mask.random_single_mask(input_data,self.people_index)
+        self.step=int(window_size*0.6)
+        self.window_matrix = [i for i in range(0, input_data.shape[0] - window_size, self.step)]
+
+        random.seed(8)
+        col = [i for i in data_div.train_index if i % 2 == 0]
+        self.sample_rate = 0.1
+        if self.sample_rate < 1:
+            print('sample_rate is:', self.sample_rate)
+            self.people_index = sum([[i, i + 1] for i in random.sample(col, int(self.sample_rate * len(col)))], [])
+        elif self.sample_rate >= 1:
+            print('sample_number is:', self.sample_rate)
+            self.people_index = sum([[i, i + 1] for i in random.sample(col, self.sample_rate)], [])
+        index=data_div.reference_panel+self.people_index
+        index=random.sample(index,len(index))
+        np.save('people_index_train', np.array(self.people_index))
+
+        self.input_data = input_data[:,index]
+        # sample by the random
+        #self.all_mask=mask.random_single_mask(input_data,self.people_index)
+        # sample by the chip
+        self.encode_mask=mask.chip_single_mask(input_data ,index,self.people_index)
+        #sample by all windows
+        #self.encode_mask = mask.random_mask(input_data)
         print('train ample is:' + str(len(self.window_matrix)))
 
     def __len__(self):
@@ -27,7 +46,7 @@ class TrainData(Dataset):
         dic = {}
         ix = self.window_matrix[index]
         encode_input = torch.from_numpy(self.input_data[ix:ix + self.window_size-1])
-        encode_mask=self.all_mask[ix:ix + self.window_size-1]
+        encode_mask=self.encode_mask[ix:ix + self.window_size-1]
         encode_target = encode_input
         encode_input = encode_input.masked_fill(encode_mask, -1)
         dic['encode_input'] = encode_input.unsqueeze(0)
@@ -37,13 +56,31 @@ class TrainData(Dataset):
 
 
 class TestData(Dataset):
-    def __init__(self,input_data,window_size,mask):
-        self.input_data=input_data
-        self.window_size=window_size
-        self.step=window_size//8
-        self.window_matrix = [i for i in range(0, self.input_data.shape[0] - window_size, self.step)]
-        self.people_index = random.sample([i for i in range(input_data.shape[1])], int((0.05*input_data.shape[1])))
-        self.all_mask = mask.random_single_mask(input_data, self.people_index)
+    def __init__(self,input_data,data_div,window_size,mask):
+        self.window_size = window_size
+        self.step = int(window_size * 0.6)
+        self.window_matrix = [i for i in range(0, input_data.shape[0] - window_size, self.step)]
+
+        random.seed(8)
+        col = [i for i in data_div.val_index if i % 2 == 0]
+        self.sample_rate = 0.1
+        if self.sample_rate < 1:
+            print('sample_rate is:', self.sample_rate)
+            self.people_index = sum([[i, i + 1] for i in random.sample(col, int(self.sample_rate * len(col)))], [])
+        elif self.sample_rate >= 1:
+            print('sample_number is:', self.sample_rate)
+            self.people_index = sum([[i, i + 1] for i in random.sample(col, self.sample_rate)], [])
+        index = data_div.reference_panel + self.people_index
+        index = random.sample(index, len(index))
+        np.save('people_index_val', np.array(self.people_index))
+
+        self.input_data = input_data[:, index]
+        # sample by the random
+        # self.all_mask=mask.random_single_mask(input_data,self.people_index)
+        # sample by the chip
+        self.encode_mask = mask.chip_single_mask(input_data, index, self.people_index)
+        # sample by all windows
+        # self.encode_mask = mask.random_mask(input_data)
         print('test ample is:' + str(len(self.window_matrix)))
 
     def __len__(self):
@@ -53,7 +90,7 @@ class TestData(Dataset):
         dic = {}
         ix = self.window_matrix[index]
         encode_input = torch.from_numpy(self.input_data[ix:ix + self.window_size-1])
-        encode_mask = self.all_mask[ix:ix + self.window_size - 1]
+        encode_mask = self.encode_mask[ix:ix + self.window_size - 1]
         encode_target = encode_input
         encode_input = encode_input.masked_fill(encode_mask, -1)
         dic['encode_input'] = encode_input.unsqueeze(0)
@@ -63,29 +100,43 @@ class TestData(Dataset):
 
 
 class PreData(Dataset):
-    def __init__(self,input_data,window_size,mask):
+    def __init__(self,input_data,data_div,window_size,mask):
         self.window_size=window_size
         self.step=int(window_size*0.6)
         self.window_matrix = [i for i in range(0, input_data.shape[0], self.step)]
         self.mask= mask
-        #random mask predict
-        self.encode_mask=mask.random_mask(input_data)
-        # gene_chip mask predict
 
-        self.input_data=torch.from_numpy(input_data).masked_fill(self.encode_mask, -1)
+        # random mask predict
+        random.seed(8)
+        col = [i for i in data_div.val_index if i % 2 == 0]
+        self.sample_rate = 0.1
+        if self.sample_rate < 1:
+            print('sample_rate is:', self.sample_rate)
+            self.people_index = sum([[i, i + 1] for i in random.sample(col, int(self.sample_rate * len(col)))], [])
+        elif self.sample_rate >= 1:
+            print('sample_number is:', self.sample_rate)
+            self.people_index = sum([[i, i + 1] for i in random.sample(col, self.sample_rate)], [])
+        index = data_div.reference_panel + self.people_index
+        index = random.sample(index, len(index))
+        np.save('people_index_val', np.array(self.people_index))
+
+        self.input_data = input_data[:, index]
+        # mask by the random mask
+        # self.encode_mask=mask.random_single_mask(input_data,self.people_index)
+        # mask by the chip mask
+        self.encode_mask=mask.chip_single_mask(input_data,index,self.people_index)
+        self.input_data = torch.from_numpy(self.input_data).masked_fill(self.encode_mask,-1)
         print('test ample is:' + str(len(self.window_matrix)))
 
     def __len__(self):
         return len(self.window_matrix)
 
     def __getitem__(self, index):
-
         ix = self.window_matrix[index]
         if ix>=(self.input_data.shape[0]-self.step):
-            encode_input=self.input_data[ix:self.input_data.shape[0]]
+            encode_input=self.input_data[ix:]
         else:
             encode_input = self.input_data[ix:ix + self.window_size]
-
         return encode_input.unsqueeze(0).unsqueeze(0)
 
 
@@ -213,50 +264,6 @@ class TrainModel():
         self.num_epochs=35
         self.train_step
 '''
-
-
-def predict():
-    input_data = np.load('processed_hapmap/hapmap3.impute.hap.npy')
-    input_data = pd.DataFrame(input_data)
-
-    masked = np.load('processed/mask.npy')
-
-    window_size = 1000
-    length = input_data.shape[0]
-    col = [i for i in range(input_data.shape[1]) if i % 2 == 0]
-
-    index_file_n = open('processed/index_file.txt', 'r')
-    index_file=[eval(line) for line in index_file_n]
-    index_file_n.close()
-
-    val_dataset = PreData(input_data[index_file[0][1]], window_size, masked)
-    #val_dataset = PreData(input_data, window_size, masked)
-
-    gene = Gene(1, 1)
-    model=torch.load('runs/5.best_model_wts')
-    model=model['state']
-    gene.load_state_dict(model)
-    #gene=gene.cuda(1)
-
-    import time
-    start=time.time()
-    for i in range(len(val_dataset)):
-        #cal=gene(val_dataset[i].float().cuda(1))[0][0].data.cpu()
-        cal = gene(val_dataset[i].float())[0][0].data
-        if i==0:
-            result=cal[0:int(window_size*0.8)]
-        elif i==len(val_dataset)-1:
-            result=cal[int(0.2*window_size):cal.shape[0]]
-        else:
-            result=cal[int(0.2*window_size):int(window_size*0.8)]
-        #result=result+cal[int(0.2*window_size):int(window_size*0.8)].tolist()
-        print(i)
-        #if i==2000:
-        torch.save(result,os.path.join('./result_test',str(i)))
-    #    break
-    stop=time.time()
-    time_use=stop-start
-    print(time_use)
 
 
 def predict_new():

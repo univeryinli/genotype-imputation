@@ -1,4 +1,5 @@
 from scipy.stats import pearsonr
+import torch
 
 def correct_rate(pre,groud_s):
     pre_s=torch.round(pre).type(torch.int8)
@@ -13,5 +14,5 @@ def r2_score(pre,groud_s):
 
 
 def pearson(a,b):
-    return pearsonr(a,b)[0]
+    return pearsonr(a,b)
 

@@ -9,9 +9,8 @@ import pandas as pd
 from utils import r2_score,pearson
 
 
-
-def train_model(model, dataloads, scheduler,criterion=None,num_epochs=14,board=None,
-                train_steps=None, val_steps=None, model_save='val_loss',use_cuda=False,model_save_path='./runs',start_epoch=0,lr=None):
+def train_model(model, dataloads, scheduler,criterion=None,num_epochs=8,board=None,
+                train_steps=None, val_steps=256, model_save='val_loss',use_cuda=False,model_save_path='./runs',start_epoch=0,lr=None):
     # train step 'None' is iter all the datasets ,if num ,will iter num step.
     since = time.time()
 
@@ -76,30 +75,29 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=14,board=N
             epoch_acc = 0.0
             stop_setps=0
 
-            # ????
+            #
             for i, dataset in enumerate(dataloads[phase]):
                 encode_input=dataset['encode_input'].float()
                 encode_mask=dataset['encode_mask']
                 encode_target=dataset['encode_target'].float()
-                encode_mask_target=encode_target.masked_select(encode_mask).float()
 
                 if use_cuda:
                     encode_input=encode_input.cuda()
                     encode_mask=encode_mask.cuda()
                     encode_target=encode_target.cuda()
-                    encode_mask_target=encode_mask_target.cuda()
-
 
                 #
                 scheduler.optimizer.zero_grad()
 
                 #
                 output_v = model(encode_input)
-                loss2=0.1*F.binary_cross_entropy(output_v,encode_target)
-                loss1=0.9*F.binary_cross_entropy(output_v.masked_select(encode_mask),encode_mask_target)
+                loss2=0.1*F.binary_cross_entropy(output_v.masked_select(~encode_mask),encode_target.masked_select(~encode_mask))
+                #loss2 = 0.1 * F.mse_loss(output_v.masked_select(~encode_mask),encode_target.masked_select(~encode_mask))
+                loss1=0.9*F.binary_cross_entropy(output_v.masked_select(encode_mask),encode_target.masked_select(encode_mask))
+                #loss1 = 0.9* F.mse_loss(output_v.masked_select(encode_mask),encode_target.masked_select(encode_mask))
                 loss = loss1+loss2
 
-                acc = r2_score(output_v.masked_select(encode_mask),encode_mask_target)
+                acc = r2_score(output_v.masked_select(encode_mask),encode_target.masked_select(encode_mask))
                 # step
                 if phase == 'train':
                     loss.backward()
@@ -153,7 +151,7 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=14,board=N
 
         scheduler.step()
         # save model
-        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'1000G phase3_div'}, os.path.join(model_save_path ,'12.best_model_wts'))
+        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'1000G phase3_div'}, os.path.join(model_save_path ,'1.best_model_wts'))
 
         # board save
         if board:
@@ -195,7 +193,7 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=14,board=N
 
 
 def main():
-    from preprocess import Mask,Train_data_div
+    from preprocess import Mask,Data_div
     from unet import TrainData,TestData,Gene
     writer = SummaryWriter(comment='phase3_model')
     path = 'processed_phase3'
@@ -204,19 +202,22 @@ def main():
 
     mask = Mask(gene_chip)
     mask.maf_cal(input_data)
-    mask.missing_rate=0.99
+    mask.missing_rate=0.3
 
-    div_rate=0.7
+    input_list=[i for i in range(input_data.shape[1])]
+    div_rate=0.9
     window_size = 1000
-    train_data_div=Train_data_div(input_data,div_rate,path)
-    train_data_div.training_index_save()
+    random.seed(10)
+    data_div=Data_div(path)
+    data_div.reference_panel,data_div.study_panel=data_div.data_div(input_list,div_rate)
 
-    train_data=input_data[:,train_data_div.train_index]
-    val_data=input_data[:,train_data_div.val_index]
+    train_div=0.8
+    random.seed(9)
+    data_div.train_index,data_div.val_index=data_div.data_div(data_div.study_panel,train_div)
 
-    train_dataset = TrainData(train_data,window_size,mask)
-    val_dataset = TestData(val_data,window_size,mask)
-    data_loader = {'train':DataLoader(train_dataset,batch_size=6,shuffle=True,drop_last=True,num_workers=16),'val':DataLoader(val_dataset,batch_size=6,shuffle=True,num_workers=16)}
+    train_dataset=TrainData(input_data,data_div,window_size,mask)
+    val_dataset = TestData(input_data,data_div,window_size,mask)
+    data_loader = {'train':DataLoader(train_dataset,batch_size=4,shuffle=True,drop_last=True,num_workers=8),'val':DataLoader(val_dataset,batch_size=4,shuffle=True,num_workers=16)}
 
     model=Gene(1,1)
     lr=0.01
@@ -229,5 +230,5 @@ def main():
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,2,3,4,5'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,2,7'
     main()
