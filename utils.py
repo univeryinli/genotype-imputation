@@ -1,6 +1,9 @@
 from scipy.stats import pearsonr
 import torch
+from sklearn.metrics import roc_auc_score
 
+
+# 地方的的时间按靠
 def correct_rate(pre,groud_s):
     pre_s=torch.round(pre).type(torch.int8)
     statis = pre_s == groud_s
@@ -16,3 +19,5 @@ def r2_score(pre,groud_s):
 def pearson(a,b):
     return pearsonr(a,b)
 
+def auc(pre,groud):
+    return roc_auc_score(groud,pre)

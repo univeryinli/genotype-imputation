@@ -9,7 +9,79 @@ import pandas as pd
 from utils import r2_score,pearson
 
 
-def train_model(model, dataloads, scheduler,criterion=None,num_epochs=8,board=None,
+class TrainData(Dataset):
+    def __init__(self,input_data,data_div,window_size,mask):
+        self.data_div=data_div
+        self.mask=mask
+        self.window_size=window_size
+        self.step=int(window_size*0.4)
+        self.window_matrix = [i for i in range(0, input_data.shape[1] - window_size, self.step)]
+        self.encode_mask = mask.gene_chip
+
+        self.encode_input1 = input_data[data_div.reference_panel,:]
+        # sample by the random
+        #self.encode_mask=mask.random_single_mask(input_data ,self.index,data_div.train_index)
+        # sample by the chip
+        self.encode_target=input_data[data_div.train_index[0]].clone()
+        self.encode_input2=mask.chip_single_mask(input_data ,data_div.train_index[0:1])
+        #sample by all windows
+        #self.encode_mask = mask.random_mask(input_data)
+        print('train ample is:' + str(len(self.window_matrix)))
+
+    def __len__(self):
+        return len(self.window_matrix)
+
+    def __getitem__(self, index):
+        dic = {}
+        ix = self.window_matrix[index]
+        encode_input1 = self.encode_input1[:,ix:ix + self.window_size]
+        encode_input2 = self.encode_input2[:,ix:ix + self.window_size]
+        encode_target = self.encode_target[ix:ix +200]
+        encode_mask=self.encode_mask[ix:ix+200]
+        dic['encode_input1'] = encode_input1.unsqueeze(0)
+        dic['encode_target']=encode_target
+        dic['encode_input2']=encode_input2.unsqueeze(0)
+        dic['encode_mask']=encode_mask
+        return dic
+
+
+class TestData(Dataset):
+    def __init__(self,input_data,data_div,window_size,mask):
+        self.data_div=data_div
+        self.mask=mask
+        self.window_size=window_size
+        self.step=int(window_size*0.4)
+        self.window_matrix = [i for i in range(0, input_data.shape[1] - window_size, self.step)]
+        self.encode_mask = mask.gene_chip
+
+        self.encode_input1 = input_data[data_div.reference_panel,:]
+        # sample by the random
+        # self.encode_mask=mask.random_single_mask(input_data ,self.index,data_div.train_index)
+        # sample by the chip
+        self.encode_target = input_data[data_div.val_index[0]].clone()
+        self.encode_input2 = mask.chip_single_mask(input_data, data_div.val_index[0:1])
+        # sample by all windows
+        # self.encode_mask = mask.random_mask(input_data)
+        print('test ample is:' + str(len(self.window_matrix)))
+
+    def __len__(self):
+        return len(self.window_matrix)
+
+    def __getitem__(self, index):
+        dic = {}
+        ix = self.window_matrix[index]
+        encode_input1 = self.encode_input1[:,ix:ix + self.window_size]
+        encode_input2 = self.encode_input2[:,ix:ix + self.window_size]
+        encode_target = self.encode_target[ix:ix + 200]
+        encode_mask=self.encode_mask[ix:ix+200]
+        dic['encode_input1'] = encode_input1.unsqueeze(0)
+        dic['encode_target'] = encode_target
+        dic['encode_input2'] = encode_input2.unsqueeze(0)
+        dic['encode_mask'] = encode_mask
+        return dic
+
+
+def train_model(model, dataloads, scheduler,num_epochs=20,board=None,
                 train_steps=None, val_steps=256, model_save='val_loss',use_cuda=False,model_save_path='./runs',start_epoch=0,lr=None):
     # train step 'None' is iter all the datasets ,if num ,will iter num step.
     since = time.time()
@@ -26,11 +98,8 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=8,board=No
     step_wide=dataloads['train'].dataset.step
     print('step_wide:  ',step_wide)
 
-    if board:
-        board.add_graph(model, (dataloads['train'].dataset[0]['encode_input'].float().unsqueeze(0)))
-
     if start_epoch!=0:
-        load_state=torch.load(os.path.join(model_save_path ,'6.best_model_wts'))
+        load_state=torch.load(os.path.join(model_save_path ,'4.best_model_wts'))
         start_epoch=load_state['epoch']
         state=load_state['state']
         model.load_state_dict(state)
@@ -77,25 +146,31 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=8,board=No
 
             #
             for i, dataset in enumerate(dataloads[phase]):
-                encode_input=dataset['encode_input'].float()
-                encode_mask=dataset['encode_mask']
+                encode_input1=dataset['encode_input1'].float()
+
+                encode_input2 = dataset['encode_input2'].float()
+
                 encode_target=dataset['encode_target'].float()
 
+                encode_mask=dataset['encode_mask']
+
                 if use_cuda:
-                    encode_input=encode_input.cuda()
-                    encode_mask=encode_mask.cuda()
+                    encode_input1=encode_input1.cuda()
+                    encode_input2=encode_input2.cuda()
                     encode_target=encode_target.cuda()
+                    encode_mask=encode_mask.cuda()
 
                 #
                 scheduler.optimizer.zero_grad()
 
                 #
-                output_v = model(encode_input)
-                loss2=0.1*F.binary_cross_entropy(output_v.masked_select(~encode_mask),encode_target.masked_select(~encode_mask))
+                output_v = model(encode_input1,encode_input2)
+                #loss2=0.1*F.binary_cross_entropy(output_v.masked_select(~encode_mask),encode_target.masked_select(~encode_mask))
                 #loss2 = 0.1 * F.mse_loss(output_v.masked_select(~encode_mask),encode_target.masked_select(~encode_mask))
-                loss1=0.9*F.binary_cross_entropy(output_v.masked_select(encode_mask),encode_target.masked_select(encode_mask))
-                #loss1 = 0.9* F.mse_loss(output_v.masked_select(encode_mask),encode_target.masked_select(encode_mask))
-                loss = loss1+loss2
+                #loss1=0.9*F.binary_cross_entropy(output_v.masked_select(encode_mask),encode_target.masked_select(encode_mask))
+                #loss1 = F.mse_loss(output_v.masked_select(encode_mask),encode_target.masked_select(encode_mask))
+                loss = F.mse_loss(output_v,encode_target)
+                #loss=F.binary_cross_entropy(output_v,encode_target)
 
                 acc = r2_score(output_v.masked_select(encode_mask),encode_target.masked_select(encode_mask))
                 # step
@@ -151,7 +226,7 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=8,board=No
 
         scheduler.step()
         # save model
-        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'1000G phase3_div'}, os.path.join(model_save_path ,'1.best_model_wts'))
+        torch.save({'epoch':epoch,'state':best_model_wts,'comments':'1000G phase3_div'}, os.path.join(model_save_path ,'7.best_model_wts'))
 
         # board save
         if board:
@@ -192,34 +267,34 @@ def train_model(model, dataloads, scheduler,criterion=None,num_epochs=8,board=No
         board.close()
 
 
-def main():
-    from preprocess import Mask,Data_div
-    from unet import TrainData,TestData,Gene
+def main2():
+    from preprocess import Mask,Data_Div
+    from models.fcn import Gene
     writer = SummaryWriter(comment='phase3_model')
     path = 'processed_phase3'
     gene_chip = np.load(os.path.join(path,'mask.npy'))
-    input_data=np.load(os.path.join(path,'chr9.phase3.impute.hap.npy'))
+    input_data=np.load(os.path.join(path,'chr9.phase3.impute.hap.change.npy'))
+    input_data=input_data.transpose()
 
     mask = Mask(gene_chip)
     mask.maf_cal(input_data)
     mask.missing_rate=0.3
 
-    input_list=[i for i in range(input_data.shape[1])]
-    div_rate=0.9
-    window_size = 1000
+    data_div=Data_Div()
+    window_size = 500
+    col=[i for i in range(input_data.shape[0])]
     random.seed(10)
-    data_div=Data_div(path)
-    data_div.reference_panel,data_div.study_panel=data_div.data_div(input_list,div_rate)
+    data_div.study_panel=data_div.sampler(col,2)
+    data_div.reference_panel=list(set(col)-set(data_div.study_panel))
+    data_div.val_index=data_div.sampler(data_div.study_panel,1)
+    data_div.train_index=list(set(data_div.study_panel)-set(data_div.val_index))
 
-    train_div=0.8
-    random.seed(9)
-    data_div.train_index,data_div.val_index=data_div.data_div(data_div.study_panel,train_div)
-
+    input_data=torch.from_numpy(input_data)
     train_dataset=TrainData(input_data,data_div,window_size,mask)
     val_dataset = TestData(input_data,data_div,window_size,mask)
-    data_loader = {'train':DataLoader(train_dataset,batch_size=4,shuffle=True,drop_last=True,num_workers=8),'val':DataLoader(val_dataset,batch_size=4,shuffle=True,num_workers=16)}
+    data_loader = {'train':DataLoader(train_dataset,batch_size=24,shuffle=True,drop_last=True,num_workers=8),'val':DataLoader(val_dataset,batch_size=24,drop_last=True,shuffle=True,num_workers=8)}
 
-    model=Gene(1,1)
+    model=Gene(1,512)
     lr=0.01
     optim1=optim.SGD(model.parameters(),lr=lr,momentum=0.9)
     lr_sch=optim.lr_scheduler.LambdaLR(optim1,lr_lambda=lambda epoch:epoch*0.95)
@@ -229,6 +304,38 @@ def main():
     train_model(model,data_loader,lr_sch,board=writer,use_cuda=use_cuda,lr=lr)
 
 
+def main3():
+    from preprocess import Mask,sampler
+    from transformer_encoder import Gene
+    writer = SummaryWriter(comment='phase3_model')
+    path = 'processed_phase3'
+    gene_chip = np.load(os.path.join(path,'mask.npy'))
+    input_data=np.load(os.path.join(path,'chr9.phase3.impute.hap.npy'))
+
+    mask = Mask(gene_chip)
+    mask.maf_cal(input_data)
+    mask.missing_rate=0.3
+
+    window_size = 500
+
+    data_div.study_panel=[1000,1001,1200,1201]
+
+    data_div.train_index,data_div.val_index=data_div.study_panel[0:2],data_div.study_panel[2:4]
+
+    input_data=torch.from_numpy(input_data)
+    train_dataset=TrainData(input_data,data_div,window_size,mask)
+    val_dataset = TestData(input_data,data_div,window_size,mask)
+    data_loader = {'train':DataLoader(train_dataset,batch_size=8,shuffle=True,drop_last=True,num_workers=8),'val':DataLoader(val_dataset,batch_size=5,drop_last=True,shuffle=True,num_workers=8)}
+
+    model=Gene(window_size)
+    lr=0.01
+    optim1=optim.SGD(model.parameters(),lr=lr,momentum=0.9)
+    lr_sch=optim.lr_scheduler.LambdaLR(optim1,lr_lambda=lambda epoch:epoch*0.95)
+    use_cuda=torch.cuda.is_available()
+    print('cuda flag:  '+str(use_cuda))
+    torch.cuda.empty_cache()
+    train_model(model,data_loader,lr_sch,board=writer,use_cuda=use_cuda,lr=lr)
+
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,2,7'
-    main()
+    #os.environ["CUDA_VISIBLE_DEVICES"] = '1,2,3,4,7'
+    main2()
