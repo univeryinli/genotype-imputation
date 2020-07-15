@@ -1,3 +1,4 @@
+#coding=GBK
 import os,torch
 import random as random
 import numpy as np
@@ -55,6 +56,7 @@ class Mask():
         maf_single_mask[:,index] = maf_mask.view(-1,1)
         return maf_single_mask
 
+    # 基于一定范围的maf进行随机mask，缺失率由初始缺失率决定
     def maf_random_mask(self,maf):
         maf_common = ((maf <= 0.5) & (maf > 0.05))
         mask=self.random_mask(maf.shape[0]) & maf_common

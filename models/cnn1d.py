@@ -1,3 +1,12 @@
+#coding=GBK
+import os,json,torch,time,sys,copy,math,random
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset,DataLoader
+import torch.optim as optim
+import numpy as np
+
+
 class Gene(nn.Module):
     def __init__(self):
         super(Gene, self).__init__()
@@ -15,7 +24,8 @@ class Gene(nn.Module):
 
     def forward(self, x):
         x=self.conv(x)
+        #print(x.shape)
         x=self.pool(x)
-        x=x.squeeze(2)
+        x=x.transpose(2,1)
         x=self.linear(x)
         return x

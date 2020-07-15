@@ -1,13 +1,10 @@
-#!/usr/bin/python
-# -*- coding: iso-8859-15 -*-
+#coding=GBK
 import os,json,torch,time,sys,copy,math,random
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset,DataLoader
 import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-import pandas as pd
 
 
 class double_conv(nn.Module):

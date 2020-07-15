@@ -1,5 +1,4 @@
-#!/usr/bin/python
-# -*- coding: iso-8859-15 -*-
+#coding=GBK
 import os,json,torch,time,sys,copy,math,random
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,7 +13,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.5, max_len=5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
-        print(self.dropout)
+
         # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1).float()
@@ -53,7 +52,7 @@ class Gene(nn.Module):
         x=F.relu(x,inplace=True)
         return x.transpose(2,1)
 
-    def generate_square_subsequent_mask(self,sz):
-        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+    def generate_square_subsequent_mask(self,size):
+        mask = (torch.triu(torch.ones(size, size)) == 1).transpose(0, 1)
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
         return mask
